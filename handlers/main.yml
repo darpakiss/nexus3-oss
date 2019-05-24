@@ -4,7 +4,6 @@
     daemon-reload: true
     name: nexus.service
   listen: systemd-reload
-  when: nexus_systemd_service
 
 - name: Nexus systemd service restart
   ansible.builtin.systemd:
@@ -12,7 +11,6 @@
     state: restarted
     no_block: true
   listen: nexus-service-restart
-  when: nexus_systemd_service
   when: ansible_service_mgr == 'systemd'
 
 - name: Nexus sysv service restart
@@ -27,9 +25,12 @@
     name: nexus.service
     state: stopped
   listen: nexus-service-stop
-  when:
-    - nexus_systemd_service_file.stat.exists
-    - nexus_systemd_service
+  when: nexus_systemd_service_file.stat.exists
+
+- name: nexus-container-restart
+  debug:
+    msg: "Placeholder"
+  delegate_to: localhost
 
 - name: Nexus sysv service stop
   ansible.builtin.service:
@@ -61,7 +62,6 @@
     enabled: true
     no_block: true
   listen: httpd-service-reload
-  when: nexus_systemd_service
 
 - name: Wait for Apache port to be available
   ansible.builtin.wait_for:

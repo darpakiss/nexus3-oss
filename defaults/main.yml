@@ -19,7 +19,6 @@ nexus_data_dir: /var/nexus
 nexus_timezone: UTC # java timezone
 nexus_tmp_dir: "{{ (ansible_os_family == 'RedHat') | ternary('/var/nexus-tmp', '/tmp/nexus') }}"
 nexus_script_dir: "{{ nexus_installation_dir }}/nexus-{{ nexus_version }}/etc/scripts"
-nexus_systemd_service: true
 nexus_installed: false
 nexus_plugin_urls: []
 nexus_onboarding_wizard: false
