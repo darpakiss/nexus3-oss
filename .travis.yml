@@ -33,6 +33,7 @@ install:
 
 stages:
   - lint
+  - SCENARIO=default-docker
   - test
 
 jobs:
