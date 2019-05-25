@@ -33,11 +33,11 @@ install:
 
 stages:
   - lint
-  - SCENARIO=default-docker
   - test
 
 jobs:
   include:
+  - SCENARIO=default-docker
     - stage: lint
       name: Checking overall syntax (groovy, yaml, python)
       script: |-

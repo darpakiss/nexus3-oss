@@ -24,7 +24,7 @@
   when: nexus_purge | default(false) | bool
 
 - name: Digest splited blob list var
-- include_tasks: nexus_{{ 'installed' if nexus_installed else 'install' }}.yml
+- include_tasks: nexus_{{ 'docker' if nexus_docker else 'install' }}.yml
   ansible.builtin.include_vars: blob_vars.yml
   when: nexus_blob_split | bool
   when: not nexus_installed
