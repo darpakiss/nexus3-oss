@@ -439,7 +439,6 @@
     - wait-for-nexus
     - wait-for-nexus-port
   when: ansible_service_mgr != 'systemd'
-
 - name: Install plugins from remote source
   ansible.builtin.get_url:
     url: "{{ item }}"
@@ -454,44 +453,20 @@
 
 - name: Chown configuration files from nexus-latest/etc back to root
   ansible.builtin.file:
-    path: "{{ nexus_installation_dir }}/nexus-latest/etc"
     owner: root
     group: root
-    mode: a=rX,u+w
-    recurse: true
-  when: chown_config_first_time.changed
-  tags:
-    # hard to run as a handler for time being
-    - skip_ansible_lint
-
 - name: Prevent nexus to create any new configuration files in nexus-latest/etc inside {{ nexus_installation_dir }}
   ansible.builtin.file:
-    path: "{{ item }}"
     state: directory
     owner: root
     group: root
-    mode: "0755"
-    recurse: false
-  with_items: "{{ nexus_app_dir_settings_dirs }}"
-
-- name: Access scripts API endpoint with defined admin password
   ansible.builtin.uri:
     url: "{{ nexus_api_scheme }}://{{ nexus_api_hostname }}:{{ nexus_api_port }}{{ nexus_api_context_path }}{{ nexus_rest_api_endpoint }}"
     method: HEAD
     user: admin
-    password: "{{ nexus_admin_password }}"
     force_basic_auth: true
-    status_code: 200, 401
-    validate_certs: "{{ nexus_api_validate_certs }}"
-  register: nexus_api_head_with_defined_password
   check_mode: false
-
-- name: Register defined admin password for next operations
   ansible.builtin.set_fact:
-    current_nexus_admin_password: "{{ nexus_admin_password }}"
-  when: nexus_api_head_with_defined_password.status == 200
-  no_log: true
-
 - name: Check if admin.password file exists
   ansible.builtin.stat:
     path: "{{ nexus_data_dir }}/admin.password"
@@ -512,81 +487,35 @@
       ansible.builtin.set_fact:
         nexus_default_admin_password: "{{ _slurpedpass.content | b64decode }}"
 
-- name: Access scripts API endpoint with default admin password
   ansible.builtin.uri:
     url: "{{ nexus_api_scheme }}://{{ nexus_api_hostname }}:{{ nexus_api_port }}{{ nexus_api_context_path }}{{ nexus_rest_api_endpoint }}"
     method: HEAD
     user: admin
-    password: "{{ nexus_default_admin_password }}"
     force_basic_auth: true
-    status_code: 200, 401
-    validate_certs: "{{ nexus_api_validate_certs }}"
-  register: nexus_api_head_with_default_password
-  when: nexus_api_head_with_defined_password.status == 401
-
-- name: Register default admin password for next operations
   ansible.builtin.set_fact:
-    current_nexus_admin_password: "{{ nexus_default_admin_password }}"
-  when: (nexus_api_head_with_default_password.status | default(false)) == 200
-
-- name: Ensure current Nexus password is known
   ansible.builtin.fail:
-    msg: >-
-      Failed to determine current Nexus password
       (it is neither the default/generated nor the defined password).
-      If you are trying to change nexus_admin_password after first
-      install, please set `-e nexus_default_admin_password=oldPassword`
-      on the ansible-playbook command line.
-      See https://github.com/ansible-ThoTeam/nexus3-oss/blob/master/README.md#change-admin-password-after-first-install
-  when: current_nexus_admin_password is not defined
-
-- name: Force (re-)registration of groovy scripts (purge reference dir)
   ansible.builtin.file:
-    path: "{{ nexus_data_dir }}/groovy-raw-scripts"
-    state: absent
-  when: nexus_force_groovy_scripts_registration | default(false)
-
-- name: Create directories to hold current groovy scripts for reference
   ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
     mode: "0755"
-  with_items:
-    - "{{ nexus_data_dir }}/groovy-raw-scripts/current"
-    - "{{ nexus_data_dir }}/groovy-raw-scripts/new"
-
-- name: Archive scripts
   become: false
   community.general.archive:
-    path: "{{ role_path }}/files/groovy/*"
     dest: /tmp/nexus-upload-groovy-scripts.tar.gz
     mode: "0644"
   check_mode: false
-  run_once: true
-  delegate_to: localhost
-
-- name: Upload new scripts
   ansible.builtin.unarchive:
     src: /tmp/nexus-upload-groovy-scripts.tar.gz
-    dest: "{{ nexus_data_dir }}/groovy-raw-scripts/new/"
     mode: "0644"
-
 - name: Upload scripts with meaningful message on failure
   block:
-    - name: Sync new scripts to old and get differences
       ansible.builtin.shell:
         cmd: >
           set -o pipefail &&
           rsync -ric {{ nexus_data_dir }}/groovy-raw-scripts/new/ {{ nexus_data_dir }}/groovy-raw-scripts/current/
           | cut -d" " -f 2 | sed "s/\.groovy//g"
         executable: /bin/bash
-      register: nexus_groovy_files_changed
       check_mode: false
-      changed_when: false
 
-  rescue:
     - name: Rsync error information
       ansible.builtin.debug:
         msg:
@@ -596,26 +525,11 @@
     - name: Fail on rsync error
       ansible.builtin.fail:
         msg: Rsync error - See debug message above
-
-- name: Declare new or changed groovy scripts in nexus
   ansible.builtin.include_tasks: declare_script_each.yml
-  with_items: "{{ nexus_groovy_files_changed.stdout_lines }}"
-
-- name: Change admin password if we are still using default
   when: (nexus_api_head_with_default_password.status | default(false)) == 200
-  block:
     - name: Update admin password
       ansible.builtin.include_tasks: call_script.yml
-      vars:
-        script_name: update_admin_password
-        args:
-          new_password: "{{ nexus_admin_password }}"
-
-    - name: Admin password changed
       ansible.builtin.set_fact:
-        current_nexus_admin_password: "{{ nexus_admin_password }}"
-      no_log: true
-
     - name: Clear generated password file from install (nexus > 3.17)
       ansible.builtin.file:
         path: "{{ nexus_data_dir }}/admin.password"
