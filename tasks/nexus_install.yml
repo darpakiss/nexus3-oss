@@ -176,17 +176,10 @@
     state: directory
     mode: "0750"
 
-- name: Setup Nexus data directory
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Dkaraf.data=.*
     line: -Dkaraf.data={{ nexus_data_dir }}
-  notify:
-    - nexus-service-stop
-
-- name: Setup JVM logfile directory
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-XX:LogFile=.*
     line: -XX:LogFile={{ nexus_data_dir }}log/jvm.log
   notify:
@@ -197,38 +190,18 @@
     dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Dkaraf.log=.*
     line: -Dkaraf.log={{ nexus_data_dir }}log
-  notify:
-    - nexus-service-stop
-
-- name: Setup Nexus default timezone
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Duser.timezone=.*
     line: -Duser.timezone={{ nexus_timezone }}
-  notify:
-    - nexus-service-stop
-
-- name: Setup Nexus JVM min heap size
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Xms.*
     line: -Xms{{ nexus_min_heap_size }}
-  notify: nexus-service-stop
-
-- name: Setup Nexus JVM max heap size
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Xmx.*
     line: -Xmx{{ nexus_max_heap_size }}
-  notify: nexus-service-stop
-
-- name: Setup Nexus JVM max direct memory
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-XX:MaxDirectMemorySize=.*
     line: -XX:MaxDirectMemorySize={{ nexus_max_direct_memory }}
-  notify: nexus-service-stop
-
 - name: Setup additional and custom vm options if present (or remove them if none)
   vars:
     options: "{{ nexus_custom_jvm_settings | d([]) }}"
@@ -251,8 +224,6 @@
   ansible.builtin.file:
     path: "{{ nexus_tmp_dir }}"
     state: directory
-    owner: "{{ nexus_os_user }}"
-    group: "{{ nexus_os_group }}"
     mode: "0750"
 
 - name: Create Nexus backup directory
@@ -263,15 +234,9 @@
     group: "{{ nexus_os_group }}"
     mode: "0750"
   when: nexus_backup_dir_create | bool
-
-- name: Setup Nexus tmp directory
   ansible.builtin.lineinfile:
-    dest: "{{ nexus_installation_dir }}/nexus-latest/bin/nexus.vmoptions"
     regexp: ^-Djava.io.tmpdir=.*
     line: -Djava.io.tmpdir={{ nexus_tmp_dir }}
-  notify:
-    - nexus-service-stop
-
 - name: Set NEXUS_HOME for the service user
   ansible.builtin.lineinfile:
     dest: "{{ nexus_os_user_home_dir }}/.bashrc"
@@ -332,7 +297,6 @@
   notify:
     - systemd-reload
   when: ansible_service_mgr == 'systemd'
-
 - name: Create sysv service configuration
   ansible.builtin.file:
     path: /etc/init.d/nexus
@@ -346,15 +310,11 @@
     - name: Deploy backup restore script
       ansible.builtin.template:
         src: nexus-blob-restore.sh.j2
-        dest: "{{ nexus_script_dir }}/nexus-blob-restore.sh"
         mode: "0755"
 
     - name: Symlink backup restore script to /sbin
       ansible.builtin.file:
-        src: "{{ nexus_script_dir }}/nexus-blob-restore.sh"
         dest: /sbin/nexus-blob-restore.sh
-        state: link
-
 - name: Check if data directory is empty (first-time install)
   ansible.builtin.find:
     paths:
@@ -363,9 +323,7 @@
       - lost+found
     recurse: false
     file_type: any
-  register: nexus_data_dir_contents
   check_mode: false
-  changed_when: false
 
 - name: Clean cache for upgrade process
   ansible.builtin.file:
